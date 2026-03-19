@@ -10,8 +10,6 @@ from datetime import datetime
 from flask import Flask
 from telegram import Bot
 
-TOKEN = "8623453596:AAFfUOnFh2faHWL0BKCeHhaCT6sdvR92bvQ"
-CHAT_ID = 825330112
 
 bot = Bot(token=TOKEN)
 
@@ -23,37 +21,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-pairs = {
-    "EURUSD": "EURUSD=X",
-    "GBPUSD": "GBPUSD=X",
-    "USDJPY": "JPY=X",
-    "AUDUSD": "AUDUSD=X",
-    "USDCHF OTC": "CHF=X",
-    "NZDJPY OTC": "NZDJPY=X",
-    "EURJPY OTC": "EURJPY=X",
-    "EUR/CAD": "EURCAD=X",
-    "CHF/NOK OTC": "CHFNOK=X",
-    "AUD/CAD OTC": "AUDCAD=X",
-    "GBP/JPY": "GBPJPY=X",
-    "AUD/JPY": "AUDJPY=X",
-    "NZD/USD": "NZDUSD=X"
-}
-
-last_signals_s1 = {}
-last_signals_s2 = {}
-cooldown_s2 = {}
-error_cooldown = {}
-last_morning_summary = None
-
-# ===== СТРАТЕГІЯ 1: подвійний таймфрейм =====
-def analyze_s1(pair_name, symbol):
-    df5 = yf.download(symbol, interval="5m", period="1d", auto_adjust=True, progress=False)
-    if df5.empty or len(df5) < 200:
-        return None
-    close5 = df5['Close'].squeeze()
-    df5['ema200'] = ta.trend.ema_indicator(close5, window=200)
-    trend_up = float(close5.iloc[-1]) > float(df5['ema200'].iloc[-1])
-    trend_down = not trend_up
 
     df1 = yf.download(symbol, interval="1m", period="1d", auto_adjust=True, progress=False)
     if df1.empty or len(df1) < 50:
@@ -78,47 +45,11 @@ def analyze_s1(pair_name, symbol):
     return signal
 
 
-# ===== СТРАТЕГІЯ 2: ATR + MACD + BB + вихідні + cooldown =====
-def is_active_time():
-    now = datetime.utcnow()
-    if now.weekday() >= 5:  # субота=5, неділя=6
-        return False
-    return 7 <= now.hour <= 20
-
-def analyze_s2(pair_name, symbol):
-    if not is_active_time():
-        return None
-
-    df = yf.download(symbol, interval="1m", period="1d", auto_adjust=True, progress=False)
-
-    # перевірка порожніх або недостатніх даних
+атніх даних
     if df is None or df.empty or len(df) < 50:
         return None
 
-    close = df['Close'].squeeze()
-    high = df['High'].squeeze()
-    low = df['Low'].squeeze()
 
-    df['ema50'] = ta.trend.ema_indicator(close, window=50)
-    df['ema200'] = ta.trend.ema_indicator(close, window=200)
-    df['rsi'] = ta.momentum.rsi(close, window=14)
-    df['atr'] = ta.volatility.average_true_range(high, low, close, window=14)
-
-    # MACD
-    macd_obj = ta.trend.MACD(close)
-    df['macd'] = macd_obj.macd()
-    df['macd_sig'] = macd_obj.macd_signal()
-
-    # Bollinger Bands
-    bb_obj = ta.volatility.BollingerBands(close, window=20, window_dev=2)
-    df['bb_upper'] = bb_obj.bollinger_hband()
-    df['bb_lower'] = bb_obj.bollinger_lband()
-
-    ema50 = float(df['ema50'].iloc[-1])
-    ema200 = float(df['ema200'].iloc[-1])
-    rsi = float(df['rsi'].iloc[-1])
-    atr_last = float(df['atr'].iloc[-1])
-    atr_mean = float(df['atr'].mean())
     cl = float(close.iloc[-1])
     cl_prev = float(close.iloc[-2])
     macd = float(df['macd'].iloc[-1])
@@ -147,17 +78,7 @@ def analyze_s2(pair_name, symbol):
             cl <= bb_lower * 1.002):
         signal = "BUY"
 
-    # SELL: тренд вниз + відкат до EMA50 + RSI + MACD ведмежий + ціна біля верхньої BB
-    elif (ema50 < ema200 and
-          cl >= ema50 and
-          50 < rsi < 75 and
-          cl < cl_prev and
-          macd < macd_sig and
-          cl >= bb_upper * 0.998):
-        signal = "SELL"
-
-    if not signal:
-        return None
+    # SELL: трен
 
     # cooldown 5 хвилин
     now = time.time()
